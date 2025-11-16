@@ -6,7 +6,7 @@ import numpy as np
 
 ti.init(arch=ti.gpu)
 
-size = 1000, 1000
+size = 500, 500
 
 # setting up ffmpeg, rendered frames are going to get passed in here to make a video
 ffmpeg = subprocess.Popen(
@@ -28,10 +28,10 @@ ffmpeg = subprocess.Popen(
     stdin=subprocess.PIPE
 )
 
-dx = 0.001
+dx = 0.002
 dy = dx
 g = 9.81
-H0 = 0.05
+H0 = 0.025
 
 # dynamic dt based on stability condition
 Courant = 0.4
@@ -40,8 +40,8 @@ dt = Courant * dx / (g * H0) ** 0.5
 n_manning = 0.009  # acrylic-like bottom roughness
 
 A_emit = 0.01   # amplitude (meters)
-f_emit = 1     # frequency (Hz)
-emit_x, emit_y = 500, 500
+f_emit = 5     # frequency (Hz)
+emit_x, emit_y = 250, 250
 
 
 Q = ti.Vector.field(3, ti.f32, shape=size)   # [h, hu, hv]

@@ -1,5 +1,5 @@
 tank_size = 1, 1
-size = 1000, 1000
+size = 500, 500
 
 import taichi as ti
 import subprocess
@@ -27,9 +27,9 @@ ffmpeg = subprocess.Popen(
     stdin=subprocess.PIPE
 )
 
-simulation_time = 35 #in seconds
+simulation_time = 15 #in seconds
 
-c = ti.math.sqrt(0.25 * 9.81)
+c = ti.math.sqrt(0.01 * 9.81)
 dx = tank_size[0] / size[0]
 
 # dynamic dt based on stability condition
@@ -101,7 +101,7 @@ def update(currentI: ti.i32):
         xB = electronOscillations[i, beforeLastI]
 
         dxdt = (xL - xB) / dt
-        gamma = -0.2 + 1000 * xL**2
+        gamma = -0.2 + 100 * xL**2
         omega2_x = omega_emit**2 * xL
         E = 0.3 * F[electronPositions[i][0], electronPositions[i][1], lastI]
         R = 0
@@ -116,24 +116,24 @@ def update(currentI: ti.i32):
 
 @ti.kernel
 def draw(currentI: ti.i32):
-    # for i, j in pixels:
-    #     # later i'll make this prettier
-    #     v = 10 * F[i, j, currentI]
-
-    #     vp = ti.math.clamp(v, 0, 1)
-    #     vn = ti.math.clamp(-v, 0, 1)
-
-    #     pixels[i, j] = ti.Vector([vp, 0, vn])
-
     for i, j in pixels:
-        lastI = int((currentI + 2) % 3)
+        # later i'll make this prettier
+        v = 40 * F[i, j, currentI]
 
-        x = F[i, j, currentI]
-        v = (x - F[i, j, lastI]) / dt
+        vp = ti.math.clamp(v, 0, 1)
+        vn = ti.math.clamp(-v, 0, 1)
 
-        c = x**2 + (v/omega_emit)**2
+        pixels[i, j] = ti.Vector([vp, 0, vn])
 
-        pixels[i, j] = ti.Vector([c, c, c])
+    # for i, j in pixels:
+    #     lastI = int((currentI + 2) % 3)
+
+    #     x = F[i, j, currentI]
+    #     v = (x - F[i, j, lastI]) / dt
+
+    #     c = x**2 + (v/omega_emit)**2
+
+    #     pixels[i, j] = ti.Vector([c, c, c])
 
 
 
@@ -146,7 +146,7 @@ for frame in range(int(simulation_time/dt)):
 
     # updating the emitter
     if (t < 1/f_emit):
-        F[250, 250, I] = 1*ti.math.sin(omega_emit * t)
+        F[250, 250, I] = 0.5*ti.math.sin(omega_emit * t)
 
     I = (I + 1) % 3
     t += dt
