@@ -2,7 +2,7 @@ import taichi as ti
 import subprocess
 import numpy as np
 
-ti.init(arch=ti.cpu)
+ti.init(arch=ti.gpu)
 
 tank_size = 0.5 # in meters
 H = 0.025  # original tank height before waves
@@ -45,7 +45,7 @@ dt = Courant * dx / wave_speed
 
 viscous_drag = 1  # drag against the bottom of the tank
 # ignoring viscosity
-density = 1000
+density = 1
 
 # 3 entries for (oldest, old, new), although they change jobs cyclicly
 h = ti.Vector.field(3, ti.f32, shape=size)
@@ -91,8 +91,9 @@ def update(this_slice: ti.i32, time: ti.f32):
     next_slice = (this_slice + 1) % 3
     before_last_slice = next_slice
 
+
+    starting = ti.math.min(time, 1)
     oscillator_velocity = (oscillator_pos[this_slice] - oscillator_pos[last_slice]) / dt
-    oscillator_velocity *= 4000
 
     for i in h:
         tank_pos = ti.cast(i, ti.f32) * tank_size/size
@@ -107,13 +108,17 @@ def update(this_slice: ti.i32, time: ti.f32):
         u_r = reflect_sample(u, this_slice, i+1, size)
         u_rr = reflect_sample(u, this_slice, i+2, size)
 
-        starting = ti.math.min(time, 1)
-        oscillator_pressure_gradient = get_pressure_gradient(tank_pos, tank_size/2, 0.01, oscillator_velocity + 150*starting)
+        s_f32 = ti.cast(size, ti.f32)
 
-        external_pressure_strength = 200 * ti.max(-25*ti.abs(time-0.5)+1, 0)
-        external_pressure_gradient = get_pressure_gradient(tank_pos, 0.1, 0.003, external_pressure_strength)
+        tank_pos = ti.cast(i, ti.f32) * tank_size/s_f32
+        oscillator_baseline_pressure_gradient = get_pressure_gradient(tank_pos, tank_size/2, 0.005, (150*starting)/1000)
+        oscillator_pressure_gradient = get_pressure_gradient(tank_pos, tank_size/2, 0.005, 2e3*oscillator_velocity)
 
-        del_pressure_del_x = oscillator_pressure_gradient + external_pressure_gradient
+        external_pressure_strength = 200.0 * ti.max(-25.0*ti.abs(time-0.5)+1.0, 0)
+        external_pressure_gradient = get_pressure_gradient(tank_pos, 0.1, 0.003, external_pressure_strength/1000)
+
+        del_pressure_del_x = oscillator_baseline_pressure_gradient + oscillator_pressure_gradient + external_pressure_gradient
+
 
         del_h_del_x = -h_ll - 2*h_l + 2*h_r + h_rr
         del_h_del_x /= 8 * dx
@@ -145,6 +150,8 @@ def damp_edge_velocity(this_slice: ti.i32):
 
 @ti.kernel
 def draw(current_slice: ti.i32):
+    p = 1e7*oscillator_pos[current_slice]
+
     for i, j in pixels:
         water_height = -h[j][current_slice] + H
         water_height_pixels = water_height * view_height/(2*H)
@@ -155,12 +162,21 @@ def draw(current_slice: ti.i32):
 
         pixels[i, j] = ti.math.clamp(pixels[i, j], 0, 1)
 
+        offset = size/2 + p
+        if (p <= 0):
+            if (i == 10 and offset <= j and j <= size/2):
+                pixels[i, j] = ti.Vector([1, 0, 0])
+        else:
+            if (i == 10 and size/2 <= j and j <= offset):
+                pixels[i, j] = ti.Vector([1, 0, 0])
+
 setup()
 
 oscillator_pos = ti.field(dtype=ti.f32, shape=(3))
 oscillator_mass = 1
 oscillator_damping = 0
-oscillator_natural_frequency = 64
+# oscillator_natural_frequency = 64
+oscillator_natural_frequency = 0.01*wave_speed/(60/1000)
 
 @ti.kernel
 def update_oscillator(current_slice: ti.i32, oscillator_damping: ti.f32):
@@ -169,7 +185,7 @@ def update_oscillator(current_slice: ti.i32, oscillator_damping: ti.f32):
 
     loc = ti.cast(size/2, ti.i32)
 
-    local_F = 1000 * h[loc][current_slice]
+    local_F = h[loc][current_slice]
 
     oscillator_pos[next_slice] = (
         dt**2 * local_F / oscillator_mass -
@@ -185,9 +201,9 @@ for frame in range(int(simulation_time/dt)):
 
     update(current_slice, t)
     damp_edge_velocity(current_slice)
-    # damping = -5
-    # if (t > 15): damping = 5
-    damping = 0.1
+    damping = -35
+    if (t > 15): damping = 35
+    damping = -35
     update_oscillator(current_slice, damping)
 
     draw(current_slice)
