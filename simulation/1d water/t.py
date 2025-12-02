@@ -27,7 +27,7 @@ ffmpeg = subprocess.Popen(
         "-pix_fmt", "yuv420p",
         '-preset', 'ultrafast',
         "-crf", "20",
-        "simulation/1d water/sim.mp4"
+        "simulation/1d water/sim_working_somehow.mp4"
     ],
     stdin=subprocess.PIPE
 )
@@ -41,11 +41,12 @@ g = 9.81
 # dynamic dt based on stability condition
 Courant = 0.1
 wave_speed = (g * H) ** 0.5
+print(wave_speed)
 dt = Courant * dx / wave_speed
 
 viscous_drag = 1  # drag against the bottom of the tank
 # ignoring viscosity
-density = 1
+density = 1 #should be ~1000 but this is nicer for the numbers
 
 # 3 entries for (oldest, old, new), although they change jobs cyclicly
 h = ti.Vector.field(3, ti.f32, shape=size)
@@ -72,18 +73,10 @@ def setup():
         h[i] = ti.Vector([0, 0, 0])
         u[i] = ti.Vector([0, 0, 0])
 
-@ti.func
-# applies a gaussian beam of pressure at position `center` (in tank space), with `spread` (sqrt(2) standard deviation in tank space), normalized with a multiple `strength`, then the gradient is calculated at point `sample`
-def get_pressure_gradient(sample: ti.f32, center: ti.f32, spread: ti.f32, strength: ti.f32):
-    # normalizing the position parameters to the tank size
-    sample_norm = sample / tank_size
-    center_norm = center / tank_size
-    spread_norm = spread / tank_size
+# @ti.func
+# # applies a gaussian beam of pressure at position `center` (in tank space), with `spread` (1 standard deviation in tank space), normalized with a multiple `strength`, then the gradient is calculated at point `sample`
+# def get_pressure_gradient(sample: ti.f32, center: ti.f32, spread: ti.f32, strength: ti.f32):
 
-    pressure = strength/(ti.sqrt(ti.math.pi)*spread_norm) * ti.exp(-(sample_norm-center_norm)**2 / spread_norm**2)
-    pressure_gradient = -2/spread_norm * (sample_norm-center_norm) * pressure
-
-    return pressure_gradient
 
 @ti.kernel
 def update(this_slice: ti.i32, time: ti.f32):
@@ -91,13 +84,9 @@ def update(this_slice: ti.i32, time: ti.f32):
     next_slice = (this_slice + 1) % 3
     before_last_slice = next_slice
 
-
-    starting = ti.math.min(time, 1)
     oscillator_velocity = (oscillator_pos[this_slice] - oscillator_pos[last_slice]) / dt
 
     for i in h:
-        tank_pos = ti.cast(i, ti.f32) * tank_size/size
-
         h_ll = reflect_sample(h, this_slice, i-2, size)
         h_l = reflect_sample(h, this_slice, i-1, size)
         h_r = reflect_sample(h, this_slice, i+1, size)
@@ -109,16 +98,19 @@ def update(this_slice: ti.i32, time: ti.f32):
         u_rr = reflect_sample(u, this_slice, i+2, size)
 
         s_f32 = ti.cast(size, ti.f32)
+        i_f32 = ti.cast(i, ti.f32)
 
-        tank_pos = ti.cast(i, ti.f32) * tank_size/s_f32
-        oscillator_baseline_pressure_gradient = get_pressure_gradient(tank_pos, tank_size/2, 0.005, (150*starting)/1000)
-        oscillator_pressure_gradient = get_pressure_gradient(tank_pos, tank_size/2, 0.005, 2e3*oscillator_velocity)
+        starting = ti.math.min(time, 1)
+        pressure_oscillator = (10000000 * oscillator_velocity+1000*starting) * ti.math.exp(-10/s_f32 * (i_f32-s_f32/2)**2)
+        del_pressure_oscillator_del_x = -2/size * (i-size/2) * pressure_oscillator
 
-        external_pressure_strength = 200.0 * ti.max(-25.0*ti.abs(time-0.5)+1.0, 0)
-        external_pressure_gradient = get_pressure_gradient(tank_pos, 0.1, 0.003, external_pressure_strength/1000)
+        pressure_external_pos = 400
+        pressure_external_strength = 10000 * ti.max(-5*ti.abs(time-2)+1, 0)
+        pressure_external = pressure_external_strength * ti.math.exp(-10/s_f32 * (i_f32-pressure_external_pos)**2)
+        del_pressure_external_del_x = -2/size * (i-pressure_external_pos) * pressure_external
+        del_pressure_external_del_x = 0
 
-        del_pressure_del_x = oscillator_baseline_pressure_gradient + oscillator_pressure_gradient + external_pressure_gradient
-
+        del_pressure_del_x = del_pressure_oscillator_del_x + del_pressure_external_del_x
 
         del_h_del_x = -h_ll - 2*h_l + 2*h_r + h_rr
         del_h_del_x /= 8 * dx
@@ -150,8 +142,6 @@ def damp_edge_velocity(this_slice: ti.i32):
 
 @ti.kernel
 def draw(current_slice: ti.i32):
-    p = 1e7*oscillator_pos[current_slice]
-
     for i, j in pixels:
         water_height = -h[j][current_slice] + H
         water_height_pixels = water_height * view_height/(2*H)
@@ -162,21 +152,12 @@ def draw(current_slice: ti.i32):
 
         pixels[i, j] = ti.math.clamp(pixels[i, j], 0, 1)
 
-        offset = size/2 + p
-        if (p <= 0):
-            if (i == 10 and offset <= j and j <= size/2):
-                pixels[i, j] = ti.Vector([1, 0, 0])
-        else:
-            if (i == 10 and size/2 <= j and j <= offset):
-                pixels[i, j] = ti.Vector([1, 0, 0])
-
 setup()
 
 oscillator_pos = ti.field(dtype=ti.f32, shape=(3))
 oscillator_mass = 1
-oscillator_damping = 0
-# oscillator_natural_frequency = 64
-oscillator_natural_frequency = 0.01*wave_speed/(60/1000)
+oscillator_damping = -50
+oscillator_natural_frequency = wave_speed/(60/1000)
 
 @ti.kernel
 def update_oscillator(current_slice: ti.i32, oscillator_damping: ti.f32):
@@ -203,7 +184,6 @@ for frame in range(int(simulation_time/dt)):
     damp_edge_velocity(current_slice)
     damping = -35
     if (t > 15): damping = 35
-    damping = -35
     update_oscillator(current_slice, damping)
 
     draw(current_slice)
