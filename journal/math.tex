@@ -1,0 +1,104 @@
+\documentclass{article}
+\usepackage[margin=2cm]{geometry}
+
+\begin{document}
+
+\section{Simulating the water}
+
+Variables and their meanings:
+
+\begin{enumerate}
+    \item $H$: average water level (where the tank is filled to)
+    \item $h$: wave height (the real water height is h+H)
+    \item $u$: horizontal water velocity in the x-direction
+    \item $v$: horizontal water velocity in the y-direction
+    \item $P_{ext}$: external pressure applied to the water surface
+\end{enumerate}
+
+Shallow Water Equations:
+
+\begin{equation}
+    \frac{\partial h}{\partial t} + \frac{\partial (H + h) u}{\partial x} + \frac{\partial (H + h) y}{\partial y} = 0
+\end{equation}
+
+\begin{equation}
+    \frac{\partial u}{\partial t} + u \frac{\partial u}{\partial x} + v \frac{\partial u}{\partial y} + g \frac{\partial h}{\partial x} + ku + \frac{1}{\rho} \frac{\partial P_{ext}}{\partial x} = \nu \left( \frac{\partial^2 u}{\partial x^2} + \frac{\partial^2 v}{\partial y^2} \right)
+\end{equation}
+
+\begin{equation}
+    \frac{\partial v}{\partial t} + u \frac{\partial v}{\partial x} + v \frac{\partial v}{\partial y} + g \frac{\partial h}{\partial y} + kv + \frac{1}{\rho} \frac{\partial P_{ext}}{\partial x} = \nu \left( \frac{\partial^2 u}{\partial x^2} + \frac{\partial^2 v}{\partial y^2} \right)
+\end{equation}
+
+Note: $P_{ext}$ is the only term which drives the water.
+Additionally, $\nu$ is very small, $\rho \approx 1000$, and $k \approx 1$ for water.
+
+\subsection{Updating the fields through time}
+
+To simulate the differential equations, the differentials can be approximated to tiny intervals.
+
+For the terms of the form $\frac{\partial f}{\partial t}$ for some $f$, they were used to update the field $f$ from one frame to the next. i.e. using $ \{ f(t), f(t-\Delta t), f(t-2\Delta t), ... \} $ to determine $f(t+\Delta t)$.
+
+\begin{equation}
+    \frac{\partial f}{\partial t} \approx \frac{\Delta f}{\Delta t} = \frac{f(t+\Delta t) - f(t)}{\Delta t}
+\end{equation}
+
+But only using one piece of (potentially noisy) information, $f(t)$, makes the simulation really susceptible to exploding.
+
+To make it more stable, $f(t - \Delta t)$ will also be used.
+
+\begin{equation}
+    \frac{\partial f}{\partial t} \approx = \frac{3 s_1 + 1 s_2}{4}
+\end{equation}
+
+With $s_1$ the slope of $f$ from the current frame to the last, and $s_2$ the slope from the last frame to the one before it. Therefore
+
+\begin{equation}
+    \frac{\partial f}{\partial t}
+    \approx
+    \frac{
+        3 \cdot \frac{f(t + \Delta t) - f(t)}{\Delta t} +
+        1 \cdot \frac{f(t) - f(t - \Delta t)}{\Delta t}
+    }{4}
+    =
+    \frac{h(t + \Delta t) - \frac{2}{3}h(t) - \frac{1}{3} h(t - \Delta t)}{\frac{4}{3} \Delta t}
+\end{equation}
+
+Given an equation of the form
+
+\begin{equation}
+    \frac{\partial f}{\partial t} = A
+\end{equation}
+\begin{equation}
+    \frac{h(t + \Delta t) - \frac{2}{3}h(t) - \frac{1}{3} h(t - \Delta t)}{\frac{4}{3} \Delta t} \approx A
+\end{equation}
+
+The recursive formula to update $f$ is
+
+\begin{equation}
+    h(t + \Delta t) = \frac{4}{3} \Delta t \cdot A + \frac{2}{3}h(t) + \frac{1}{3} h(t - \Delta t)
+\end{equation}
+
+\subsection{Approximating spacial derivatives}
+
+The spacial derivatives can be approximated in a similar way, this time taking two slopes on each side.
+
+\begin{equation}
+    \frac{\partial f}{\partial x} = \frac{s_1 + 3s_2 + 3s_3 + s_4}{8}
+\end{equation}
+\begin{equation}
+    \frac{\partial f}{\partial x} = \frac{-f(x-2\Delta x) - 2f(x-\Delta x) + 0f(x) + 2f(x + \Delta x) + f(x + 2\Delta x)}{8\Delta x}
+\end{equation}\footnote{$f(x)$ will always have a coefficient of 0 whenever the approximation is taken with equal weighting on the left and right of the point. This was deemed acceptable, as the approximation being symmetric was assumed to be more important.}
+
+\subsection{Implementing boundaries in the simulation}
+
+The simulation features reflective boundaries. To do this, the horizontal velocity near the borders was forced to gradually become 0 with distance to the border. Additionally, if values would have been sampled outside of the simulation's borders, the point gets reflected across the border and back into the simulated area by however much it would have "overshot".
+
+\section{Simulating the lasing medium}
+
+The light waves in a laser are amplified by excited atoms within the cavity. For the purposes of this experiment, we imagine all of these atoms clumped in the middle of the cavity. We imagine the individual photon absorption/emissions as
+
+We imagine an electron a damped and driven harmonic oscillator being attracted to the nucleus with a spring-like force. It is also being driven by the electric field around it.
+
+
+
+\end{document}

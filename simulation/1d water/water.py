@@ -4,13 +4,20 @@ import numpy as np
 
 ti.init(arch=ti.gpu)
 
-tank_size = 0.5 # in meters
+tank_size = 1 # in meters
 H = 0.025  # original tank height before waves
 
 size = 1000
 view_height = int(2*H*size / tank_size)
 
 pixels = ti.Vector.field(3, ti.f32, shape=(view_height, size))
+
+
+oscillator_pos = ti.field(dtype=ti.f32, shape=(3))
+oscillator_mass = 1
+oscillator_damping = 0
+k = 5**2
+
 
 # setting up ffmpeg, rendered frames are going to get passed in here to make a video
 ffmpeg = subprocess.Popen(
@@ -32,7 +39,7 @@ ffmpeg = subprocess.Popen(
     stdin=subprocess.PIPE
 )
 
-simulation_time = 25  # in seconds
+simulation_time = 15  # in seconds
 
 dx = tank_size/size
 
@@ -72,6 +79,9 @@ def setup():
         h[i] = ti.Vector([0, 0, 0])
         u[i] = ti.Vector([0, 0, 0])
 
+    for i in oscillator_pos:
+        oscillator_pos[i] = 0.0
+
 @ti.func
 # applies a gaussian beam of pressure at position `center` (in tank space), with `spread` (sqrt(2) standard deviation in tank space), normalized with a multiple `strength`, then the gradient is calculated at point `sample`
 def get_pressure_gradient(sample: ti.f32, center: ti.f32, spread: ti.f32, strength: ti.f32):
@@ -93,7 +103,9 @@ def update(this_slice: ti.i32, time: ti.f32):
 
 
     starting = ti.math.min(time, 1)
-    oscillator_velocity = (oscillator_pos[this_slice] - oscillator_pos[last_slice]) / dt
+    oscillator_velocity = (oscillator_pos[this_slice] - (2/3)*oscillator_pos[last_slice] - (1/3)*oscillator_pos[before_last_slice]) / ((4/3)*dt)
+    oscillator_velocity *= 0.25
+    # oscillator_velocity = 0
 
     for i in h:
         tank_pos = ti.cast(i, ti.f32) * tank_size/size
@@ -112,9 +124,10 @@ def update(this_slice: ti.i32, time: ti.f32):
 
         tank_pos = ti.cast(i, ti.f32) * tank_size/s_f32
         oscillator_baseline_pressure_gradient = get_pressure_gradient(tank_pos, tank_size/2, 0.005, (150*starting)/1000)
-        oscillator_pressure_gradient = get_pressure_gradient(tank_pos, tank_size/2, 0.005, 2e3*oscillator_velocity)
+        oscillator_pressure_gradient = get_pressure_gradient(tank_pos, tank_size/2, 0.005, oscillator_velocity)
+        oscillator_baseline_pressure_gradient = 0
 
-        external_pressure_strength = 200.0 * ti.max(-25.0*ti.abs(time-0.5)+1.0, 0)
+        external_pressure_strength = 200.0 * ti.max(-15.0*ti.abs(time-0.5)+1.0, 0)
         external_pressure_gradient = get_pressure_gradient(tank_pos, 0.1, 0.003, external_pressure_strength/1000)
 
         del_pressure_del_x = oscillator_baseline_pressure_gradient + oscillator_pressure_gradient + external_pressure_gradient
@@ -150,7 +163,7 @@ def damp_edge_velocity(this_slice: ti.i32):
 
 @ti.kernel
 def draw(current_slice: ti.i32):
-    p = 1e7*oscillator_pos[current_slice]
+    p = oscillator_pos[current_slice] * size / tank_size
 
     for i, j in pixels:
         water_height = -h[j][current_slice] + H
@@ -162,6 +175,8 @@ def draw(current_slice: ti.i32):
 
         pixels[i, j] = ti.math.clamp(pixels[i, j], 0, 1)
 
+        # drawing an indicator for the oscillator's position
+
         offset = size/2 + p
         if (p <= 0):
             if (i == 10 and offset <= j and j <= size/2):
@@ -172,27 +187,42 @@ def draw(current_slice: ti.i32):
 
 setup()
 
-oscillator_pos = ti.field(dtype=ti.f32, shape=(3))
-oscillator_mass = 1
-oscillator_damping = 0
-# oscillator_natural_frequency = 64
-oscillator_natural_frequency = 0.01*wave_speed/(60/1000)
-
 @ti.kernel
-def update_oscillator(current_slice: ti.i32, oscillator_damping: ti.f32):
+def update_oscillator(current_slice: ti.i32):
     next_slice = (current_slice + 1) % 3
     last_slice = (current_slice - 1) % 3
 
-    loc = ti.cast(size/2, ti.i32)
+    center = ti.cast(size/2, ti.i32)
 
-    local_F = h[loc][current_slice]
+    local_F = 0.0
+
+    # we're taking an average of an area underneath the oscillator to get the force
+    measurement_spread_tank = 0.005
+    measurement_spread_pixels = measurement_spread_tank / tank_size * size
+    total_pixels = 2*measurement_spread_pixels
+    for i in range(-measurement_spread_pixels, measurement_spread_pixels):
+        local_F += h[center + i][current_slice]
+    local_F /= total_pixels
+
+    local_F *= 10000
+
+
+    # local_F = 0
+    # print(h[loc][current_slice])
+
+    # oscillator_pos[next_slice] = (
+    #     dt**2 * local_F / oscillator_mass -
+    #     dt*oscillator_damping/oscillator_mass*(oscillator_pos[current_slice] - oscillator_pos[last_slice]) -
+    #     # dt**2 * (oscillator_natural_frequency**2 + oscillator_damping**2/4)*oscillator_pos[current_slice] +
+    #     dt**2 * k*oscillator_pos[current_slice] +
+    #     2*oscillator_pos[current_slice] -
+    #     oscillator_pos[last_slice]
+    # )
 
     oscillator_pos[next_slice] = (
-        dt**2 * local_F / oscillator_mass -
-        dt*oscillator_damping/oscillator_mass*(oscillator_pos[current_slice] - oscillator_pos[last_slice]) -
-        dt**2 * (oscillator_natural_frequency**2 + oscillator_damping**2/4)*oscillator_pos[current_slice] +
-        2*oscillator_pos[current_slice] -
-        oscillator_pos[last_slice]
+        -k/oscillator_mass * dt**2 * oscillator_pos[current_slice] + 2 * oscillator_pos[current_slice] - oscillator_pos[last_slice]
+        +
+        dt**2 * local_F / oscillator_mass
     )
 
 t = 0
@@ -201,10 +231,7 @@ for frame in range(int(simulation_time/dt)):
 
     update(current_slice, t)
     damp_edge_velocity(current_slice)
-    damping = -35
-    if (t > 15): damping = 35
-    damping = -35
-    update_oscillator(current_slice, damping)
+    update_oscillator(current_slice)
 
     draw(current_slice)
 
