@@ -1,7 +1,12 @@
 \documentclass{article}
 \usepackage[margin=2cm]{geometry}
+\usepackage{graphicx}
 
 \begin{document}
+
+\section{What really happens in a laser}
+
+\section{Bridging the gap between a real laser and a water tank}
 
 \section{Simulating the water}
 
@@ -30,7 +35,7 @@ Shallow Water Equations:
 \end{equation}
 
 Note: $P_{ext}$ is the only term which drives the water.
-Additionally, $\nu$ is very small, $\rho \approx 1000$, and $k \approx 1$ for water.
+Additionally, $\nu$ (the kinematic viscosity) is very small, $\rho$ (water's density) $\approx 1000 \frac{kg}{m^3}$, and $k$ (the viscous drag coefficient) $\approx 1$ for water.
 
 \subsection{Updating the fields through time}
 
@@ -93,33 +98,192 @@ The spacial derivatives can be approximated in a similar way, this time taking t
 
 The simulation features reflective boundaries. To do this, the horizontal velocity near the borders was forced to gradually become 0 with distance to the border. Additionally, if values would have been sampled outside of the simulation's borders, the point gets reflected across the border and back into the simulated area by however much it would have "overshot".
 
-\section{Simulating the lasing medium}
+\section{Electrons in the field}
 
-Since the water surface is flat with vertical waves, we'll consider the electric field as two-dimensional, and assume its vector at each point in space is pointing in the up-down direction.
+Since the water surface is mostly flat with vertical waves, in modeling the electric field we'll consider it as two-dimensional, and assume its vector at each point in space is pointing in the up-down direction.
 
-We imagine an electron as a particle around an atom. We imagine the attraction to the nucleus as a restoring force in the form $-kz$ (like a spring force). Being a charged particle with charge $-e$, it is affected by the electric field $\mathbf{E}(\mathbf{r}, t)$ at its position $\mathbf{r} = (r_x, r_y)$ and at time $t$.
+We imagine an electron as a particle around an atom. We imagine the attraction to the nucleus as a restoring force in the form $-kz$ (like a spring force). Being a charged particle with charge $-e$, it is affected by the electric field $\mathbf{E}(\mathbf{r}, t)$ at its position $\mathbf{r} = (x, y)$ and at time $t$.
 
-Since the electric field will always be in the up-down ($\hat{z}$) direction, the electron's oscillation will only happen in that direction.
+Since the electric field is modeled to always be in the up-down ($\hat{z}$) direction, the electron's oscillation will only happen in that direction.
 
 Writing Newton's second law for the electron:
 
 \begin{eqnarray}
-    \mathbf{F_{net}}= m \ddot{z}
+    F_{net}= m \ddot{z}
     \\
-    -k z + q \mathbf{E}(\mathbf{r}, t) = m \ddot{z}
-    \\\\
-    \frac{q}{m} \mathbf{E} = \ddot{z} + \frac{k}{m}z
+    -k z + q E(\mathbf{r}, t) = m \ddot{z}
+    \\
+    \frac{q}{m} E = \ddot{z} + \frac{k}{m}z
 \end{eqnarray}
 
-This is the form of a driven harmonic oscillator. It is not so simple, though, because the electron, being a charged particle, affects the electric field as it is moved. For example, a wave pulse comes by in the up ($+z$) direction. This leads the electron to get pushed down (since its charge is negative). The electron is now below the 2d plane of the electric field. Then, since it's a charged particle, it pulls the field toward it, downward.
+This is the form of a driven harmonic oscillator. It is not so simple, though, because the electron, being a charged particle, affects the electric field as it is moved. For example, a wave pulse comes by in the up ($+z$) direction. This leads the electron to get pushed down (since its charge is negative). The electron is now below the 2d plane of the electric field \footnote{but we still imagine that the electron is affected by the nearest point on the field, even if it is technically not inside the field anymore}. Then, since it's a negatively charged particle, it pulls the field toward it, downward.
 
-In a way, the electron can be seen to be damping its own motion through its interaction with the electric field. It edits the field against it's position.
+\subsection{Absorption}
+
+Therefore, the electron can be seen to effectively damp the electric field around it. This then damps its own motion.
+
+While there does exist a real effect similar to this called "radiative damping", this is not how it really works. We ended up with a similar result because we did something strange, assuming that the field is effectively two-dimensional with all vectors pointing in the z-direction. Then, paradoxically, we imagine the electron to possibly be above or below the field, but that it is still affected by the field, from the point just above or below its position.
+
+The damping effect which was just described, although it is not the real way that it works, can be thought of as the absorption of light by a ground-state (normal, not excited) electron. Absorption is conveniently solved for free using this setup.
+
+For example, in the case that the electric field is in the form $E = \sin(x)$, the electron will be driven by the term $\frac{q}{m} E$. Since $q < 0$, it will begin oscillating with a motion like $z = -\sin(x)$. \footnote{The electron will not necessarily oscillate at the same frequency as the field, this depends on the choice of the "spring constant" $k$. This will be discussed later} Then the electron pulls on the field, so near the electron, the field becomes something like $E + z = \sin(x) - \sin(x) = 0$. The light near the electron disappears, it is absorbed.
+
+\subsection{Emission}
+
+The other important feature of an electron in a laser is emission: producing light. Complicated quantum mechanics would be necessary for a physically accurate description. For simplicity, this will be ignored. Instead, emission will be mimicked by using the following observation: if an electron pulling the field towards it damps the field looks like it absorbs the light, then pushing the field away from it will look like the electron is emitting light.
+
+More precisely, it will make the electron add to the amplitude of whatever wave is passing through it. It is actually important that it does this, as opposed to simply generating a new wave which is unrelated to what is happening near the electron. This is because it ensures constructive interference. Without the assurance of constructive interference, the electron might add nothing to the field, or otherwise destructively interfere with it.
+
+Mathematically, this effect amounts to "flipping the sign" of the electron's effect on the field. We can think of it as the field seeing an electron as having a positive charge and reacting accordingly, while it still moves as if it has a negative one.\footnote{Note that if the electron began to move as if it had a positive charge too, it would just be a positively charged particle while still absorbing light.}
+
+\subsection{When to absorb, when to emit}
+
+Absorption and emission of light from an atom depends on the atom's "excitement". When excited (this is practically done by applying a current to the atoms), the electrons jump to higher energies, and so when a wave passes by them (when they get "stimulated") they release that energy from the excitement into the wave. If they aren't already excited and they're in "ground state", the electrons might use the energy in that wave to jump to higher energy themselves. Note that this is assuming a two-level model of the electrons (the levels being "excited" and "ground" as described).
+
+For now, we will assume that all atoms are clumped together such that the electric field looks exactly the same near all atoms. This simplifies calculations.
+
+The technique of adding energy to an atom's electrons is called "pumping". We'll label the pumping rate (the number of electrons put into the excited state per second) as $R$. Electrons which are excited also tend to naturally lose energy (for example, in the form of heat) and drop to the ground state. We'll label the time it takes for an electron to naturally drop to the ground state, the "relaxation time" as $T$. Finally, a wave passing through a ground state electron excites it at a rate proportional to the wave's intensity $I$. Similarly, a wave passing through an excited electron tends to make it drop to the ground state at a rate proportional to $I$.
+
+Letting $N_E$ be the number of excited electrons and $N_G$ be the number of ground-state electrons in the system, we can write the above ideas into a differential equation giving the rate at which the number of excited electrons increases.
+
+\begin{equation}\label{eqn:excited_change}
+    \dot{N_E} = R - \frac{N_E}{T} - \alpha I N_E + \alpha I N_G
+\end{equation}
+
+Note that we have the nearby wave intensity $I$ as if it's the same for all electrons.
+
+Let $N = N_E - N_G$, which we can call the net excitement. Also, let $N_T = N_E + N_G$, the total number of electrons in the system, which doesn't change. These variables allow us to simply express the situation in terms of one changing quantity, the net excitement $N$.
+
+We can rewrite Equation \ref{eqn:excited_change} as
+
+\begin{equation}\label{eqn:Ndiff}
+    \dot{N} + (\frac{1}{T} + 2\alpha I)N = 2R - \frac{N_T}{T}
+\end{equation}
+
+To get a sense of how this equation acts, we can assume that the light intensity will be constant and solve for $N$ as a function of time $t$. The initial net excitement will be called $N_0$.
+
+\begin{equation}\label{eqn:N}
+    N(t) = \left(N_0 - \frac{2R - \frac{N_T}{T}}{\frac{1}{T} + 2 \alpha I} \right) e^{-\left(\frac{1}{T} + 2 \alpha I\right)t} + \frac{2R - \frac{N_T}{T}}{\frac{1}{T} + 2 \alpha I}
+\end{equation}
+
+Note that as $t \rightarrow \infty$, $N \rightarrow \frac{2R - \frac{N_T}{T}}{\frac{1}{T} + 2 \alpha I}$. This indicates that the system has a behavior where it comes to rest at an equilibrium.
+
+You may have noticed that $N$ is a count and it therefore only has integer values, while Equation \ref{eqn:N} has $N(t)$ as a continuous function. To solve this inconsistency, let's take Equation \ref{eqn:Ndiff} and divide both sides by $N_T$, then redefine $R$ so that it now represents $\frac{R}{N_T}$. This new $R$ now represents the pumping rate per atom. Letting $n = \frac{N}{N_T}$, Equation \ref{eqn:Ndiff} now becomes
+
+\begin{equation}\label{eqn:ndiff}
+    \dot{n} + (\frac{1}{T} + 2\alpha I)n = 2R - \frac{1}{T}
+\end{equation}
+
+If $N_T$ is large enough, $n$ could take any value between $-1$ and $1$ and therefore it can be thought of as approximately continuous.
+
+A useful term which is commonly used is "population inversion", when there are more excited atoms than ground-state atoms. In other words, when $n > 0$.
+
+\subsubsection{Calculating wave intensity $I$ at any point and time}
+
+Equation \ref{eqn:ndiff} requires $I$ being known, the intensity of the wave at a specific position and time. We must calculate this for a water wave, since the end goal is to reproduce the effect in water.
+
+To calculate $I$ at a certain instant and a certain position, we use the identity $I = \frac{dE}{dV} ||\mathbf{u}||$, where $\frac{dE}{dV}$ is the energy density and $||\mathbf(u)||$ is the speed of the wave at the desired position.
+
+Let's calculate $dE$ of the wave, the energy at a particular element in the water tank.
+
+\begin{eqnarray}
+    dE = dE_K + dE_p
+    \\
+    dE_K = \frac{1}{2}\,dm\,\mathbf{u}^2
+    \\
+    dE_P = dm\,g\,z
+\end{eqnarray}
+
+Since the density of water is known, we can say $dm = \rho\,dV$
+
+\begin{equation}
+    dE = \frac{1}{2}\,\rho\,dV\,\mathbf{u}^2 + \rho\,dV\,g\,z
+\end{equation}
+
+\begin{equation}
+    I = \frac{\frac{1}{2}\,\rho\,dV\,\mathbf{u}^2 + \rho\,dV\,g\,z}{dV} ||\mathbf{u}||
+\end{equation}
+
+We're using a simplifying approximation and thinking about each vertical column of water a whole element, with the same velocity $\mathbf{u}$. We'll continue the tradition by integrating the above equation across the vertical direction, from 0 at the bottom of the tank to $h+H$, the total water height. Now, instead of each point in 3D space having its own intensity, simply each vertical column of water has its own intensity. Expanding $dV$ with $dV = dx\,dy\,dz$:
+
+\begin{equation}
+    I = \frac{\frac{1}{2}\,\rho\,dx\,dy\,dz\,\mathbf{u}^2 + \rho\,dx\,dy\,dz\,g\,z}{dx\,dy\,dz} ||\mathbf{u}||
+\end{equation}
+
+\begin{equation}
+    I = \frac{\frac{1}{2}\,\rho\,dz\,\mathbf{u}^2 + \rho\,dz\,g\,z}{dz} ||\mathbf{u}||
+\end{equation}
+
+\begin{equation}
+    I \approx \frac{\int_{z=0}^{z=h+H} \left[ \frac{1}{2}\,\rho\,dz\,\mathbf{u}^2 + \rho\,dz\,g\,z \right] }{\int_{z=0}^{z=h+H} dz} ||\mathbf{u}||
+\end{equation}
+
+\begin{equation}
+    I \approx \frac{\frac{1}{2}\,\rho\,(h+H)\,\mathbf{u}^2 + \frac{1}{2}\rho\,(h+H)^2\,g }{h+H} ||\mathbf{u}||
+\end{equation}
+
+\begin{equation}
+    I \approx \frac{1}{2}\,\rho\,\mathbf{u}^3 + \frac{1}{2}\rho\,(h+H)\,g\,||\mathbf{u}||
+\end{equation}
+
+\subsection{How the electrons use $n$}
+
+In the proper quantum mechanics way of describing atoms in a laser, when population inversion is attained $n > 0$, the atoms have a net constructive effect on the laser's light in a similar way to how we described emission. Then when $n < 0$, the atoms have a net destructive effect in the same way we described absorption.
+
+Without the effect of $n$, an electron at position $z$ above the field would apply a force to the field in the upward direction.
+
+\subsection{The choice of $k$ and its impact}
+
+\appendix
+
+\section{idk yet}
+
+When discussing an electric field and how it interacts with a particle like an electron, the electron's own contribution to the field is usually ignored. This is because the field only encodes the forces which would be applied if a particle was there. At the position of a point charge like an electron, there is a singularity, and that's a large problem conceptually. However, we can get around this by treating the electron as a ball with volume. Let's see how the field reacts at the point directly at the center of the electron, as the electron moves up and down around it. Let's do it in 2d for simplicity, with "the field" being a line at $h$ (height) $=0$, keeping with how we're treating the field as an object that the electron can go above and below.
+
+For each point inside the electron's volume, it produces a tiny force
+
+\begin{equation}
+    d\mathbf{F} = -\frac{k\,dq}{\mathbf{r^2}}\hat{\mathbf{r}}
+\end{equation}
+
+We've been ignoring the horizontal components of the force, so lets just look at the vertical part
+
+\begin{equation}
+    dF = \frac{k\,dq}{x^2 + z^2}z
+\end{equation}
+
+Where $x$ and $z$ are the horizontal and vertical distances to this point within the electron. We must now add up all of the points to get the effect of the electron as a whole. $C$ denotes that we're integrating over the circle encapsulating the electron.
+
+\begin{equation}
+    F = \int\int_{C} \frac{k\,dq}{x^2 + z^2}z
+\end{equation}
+
+Let's say that the electron has radius $R$ and charge $q$, then $\frac{q}{R} = \frac{dq}{dA}$, so in polar coordinates, $dq = \frac{q}{R}\,r\,dr\,d\theta$.
+
+\begin{equation}
+    F = \int_{0}^{2\pi}\int_{0}^{R} \frac{q}{R}\,\frac{k\,r}{x^2 + z^2}z\,dr\,d\theta
+\end{equation}
+
+Written in terms of $r$ and $theta$, $x = r\cos\theta$ and $z = r\sin\theta + h$, where $h$ is the height of the center of the electron relative to the field.
+
+Integrating numerically and writing the force as a function of the height of the electron, we get the following graph
+
+\begin{figure}
+    \includegraphics{Figure_1.png}
+    \caption{Graph}
+    \label{fig:test}
+\end{figure}
 
 \end{document}
 
+It can be seen that while the electron is still overlapping the origin ($h < R$), the force felt is linear.
 
 /*
 
 partial reflection by changing "ior" with a deeper section???
+
+
+simulate the electron on its own without external field and without reflection, but keeping the same motion as the real electron.
+then, subtracting where the field is in that imaginary simulation from the real field produces a value for only the external field
 
 */

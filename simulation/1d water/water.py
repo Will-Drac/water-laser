@@ -7,7 +7,7 @@ ti.init(arch=ti.gpu)
 tank_size = 0.5 # in meters
 H = 0.025  # original tank height before waves
 
-size = 2000
+size = 1000
 view_height = int(2*H*size / tank_size)
 
 pixels = ti.Vector.field(3, ti.f32, shape=(view_height, size))
@@ -16,8 +16,11 @@ pixels = ti.Vector.field(3, ti.f32, shape=(view_height, size))
 oscillator_pos = ti.field(dtype=ti.f32, shape=(3))
 oscillator_mass = 1
 oscillator_damping = 0
-k = 32**2
+natural_frequency = 32
+k = natural_frequency**2
+oscillator_excitement = ti.field(dtype=ti.f32, shape=(1))
 
+pumping = 2
 
 # setting up ffmpeg, rendered frames are going to get passed in here to make a video
 ffmpeg = subprocess.Popen(
@@ -82,6 +85,8 @@ def setup():
     for i in oscillator_pos:
         oscillator_pos[i] = 0.0
 
+    oscillator_excitement[0] = 5
+
 @ti.func
 # applies a gaussian beam of pressure at position `center` (in tank space), with `spread` (sqrt(2) standard deviation in tank space), normalized with a multiple `strength`, then the gradient is calculated at point `sample`
 def get_pressure_gradient(sample: ti.f32, center: ti.f32, spread: ti.f32, strength: ti.f32):
@@ -103,9 +108,6 @@ def update(this_slice: ti.i32, time: ti.f32):
 
 
     starting = ti.math.min(time, 1)
-    oscillator_velocity = (oscillator_pos[this_slice] - (2/3)*oscillator_pos[last_slice] - (1/3)*oscillator_pos[before_last_slice]) / ((4/3)*dt)
-    oscillator_velocity *= 0.05
-    # oscillator_velocity = 0
 
     for i in h:
         tank_pos = ti.cast(i, ti.f32) * tank_size/size
@@ -125,7 +127,8 @@ def update(this_slice: ti.i32, time: ti.f32):
         tank_pos = ti.cast(i, ti.f32) * tank_size/s_f32
         oscillator_baseline_pressure_gradient = get_pressure_gradient(tank_pos, tank_size/2, 0.005, (150*starting)/1000)
         oscillator_baseline_pressure_gradient = 0
-        oscillator_pressure_gradient = get_pressure_gradient(tank_pos, tank_size/2, 0.02, -3*oscillator_pos[this_slice])
+        oscillator_force = oscillator_excitement[0] - 1
+        oscillator_pressure_gradient = get_pressure_gradient(tank_pos, tank_size/2, 0.02, oscillator_force*oscillator_pos[this_slice])
 
         external_pressure_strength = 200.0 * ti.max(-10.0*ti.abs(time-0.5)+1.0, 0)
         external_pressure_gradient = get_pressure_gradient(tank_pos, 0.1, 0.02, external_pressure_strength/1000)
@@ -176,7 +179,6 @@ def draw(current_slice: ti.i32):
         pixels[i, j] = ti.math.clamp(pixels[i, j], 0, 1)
 
         # drawing an indicator for the oscillator's position
-
         offset = size/2 + p
         if (p <= 0):
             if (i == 10 and offset <= j and j <= size/2):
@@ -184,6 +186,8 @@ def draw(current_slice: ti.i32):
         else:
             if (i == 10 and size/2 <= j and j <= offset):
                 pixels[i, j] = ti.Vector([1, 0, 0])
+
+        # drawing an indicator for population inversion
 
 setup()
 
@@ -211,6 +215,13 @@ def update_oscillator(current_slice: ti.i32):
         +
         dt**2 * local_F / oscillator_mass
     )
+
+    oscillator_velocity = (oscillator_pos[next_slice] - (2/3)*oscillator_pos[current_slice] - (1/3)*oscillator_pos[last_slice]) / ((4/3)*dt)
+    I = oscillator_pos[next_slice]**2 + (oscillator_velocity/natural_frequency)**2
+
+    oscillator_excitement[0] = oscillator_excitement[0] + dt * (pumping - (1 + 5*I)*oscillator_excitement[0])
+
+    print(oscillator_excitement[0])
 
 t = 0
 current_slice = 0
