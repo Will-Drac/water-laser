@@ -15,12 +15,13 @@ pixels = ti.Vector.field(3, ti.f32, shape=(view_height, size))
 
 oscillator_pos = ti.field(dtype=ti.f32, shape=(3))
 oscillator_mass = 1
-oscillator_damping = 0
+oscillator_damping = 10
 natural_frequency = 32
 k = natural_frequency**2
-oscillator_excitement = ti.field(dtype=ti.f32, shape=(1))
+oscillator_excitement = ti.field(dtype=ti.f32, shape=(1)) # initialized in setup()
 
-pumping = 2
+excitement_decay = 1
+pumping = 1
 
 # setting up ffmpeg, rendered frames are going to get passed in here to make a video
 ffmpeg = subprocess.Popen(
@@ -42,7 +43,7 @@ ffmpeg = subprocess.Popen(
     stdin=subprocess.PIPE
 )
 
-simulation_time = 15  # in seconds
+simulation_time = 45  # in seconds
 
 dx = tank_size/size
 
@@ -54,7 +55,7 @@ wave_speed = (g * H) ** 0.5
 dt = Courant * dx / wave_speed
 
 viscous_drag = 1  # drag against the bottom of the tank
-# ignoring viscosity
+# !ignoring viscosity
 density = 1
 
 # 3 entries for (oldest, old, new), although they change jobs cyclicly
@@ -85,7 +86,7 @@ def setup():
     for i in oscillator_pos:
         oscillator_pos[i] = 0.0
 
-    oscillator_excitement[0] = 5
+    oscillator_excitement[0] = 0
 
 @ti.func
 # applies a gaussian beam of pressure at position `center` (in tank space), with `spread` (sqrt(2) standard deviation in tank space), normalized with a multiple `strength`, then the gradient is calculated at point `sample`
@@ -127,7 +128,7 @@ def update(this_slice: ti.i32, time: ti.f32):
         tank_pos = ti.cast(i, ti.f32) * tank_size/s_f32
         oscillator_baseline_pressure_gradient = get_pressure_gradient(tank_pos, tank_size/2, 0.005, (150*starting)/1000)
         oscillator_baseline_pressure_gradient = 0
-        oscillator_force = oscillator_excitement[0] - 1
+        oscillator_force = 10*oscillator_excitement[0]
         oscillator_pressure_gradient = get_pressure_gradient(tank_pos, tank_size/2, 0.02, oscillator_force*oscillator_pos[this_slice])
 
         external_pressure_strength = 200.0 * ti.max(-10.0*ti.abs(time-0.5)+1.0, 0)
@@ -211,17 +212,20 @@ def update_oscillator(current_slice: ti.i32):
     local_F *= 10000
 
     oscillator_pos[next_slice] = (
-        -k/oscillator_mass * dt**2 * oscillator_pos[current_slice] + 2 * oscillator_pos[current_slice] - oscillator_pos[last_slice]
-        +
-        dt**2 * local_F / oscillator_mass
+        -k*dt**2/oscillator_mass*oscillator_pos[current_slice]
+        +dt**2*local_F/oscillator_mass
+        -oscillator_damping*dt/oscillator_mass*(oscillator_pos[current_slice] - oscillator_pos[last_slice])
+        +2*oscillator_pos[current_slice]
+        -oscillator_pos[last_slice]
     )
 
-    oscillator_velocity = (oscillator_pos[next_slice] - (2/3)*oscillator_pos[current_slice] - (1/3)*oscillator_pos[last_slice]) / ((4/3)*dt)
-    I = oscillator_pos[next_slice]**2 + (oscillator_velocity/natural_frequency)**2
+    horizontal_speed = ti.abs(u[center][current_slice])
+    water_height = h[center][current_slice]
+    I = 0.5*density*ti.pow(horizontal_speed, 3) + 0.5*density*(water_height + H)*g*horizontal_speed
 
-    oscillator_excitement[0] = oscillator_excitement[0] + dt * (pumping - (1 + 5*I)*oscillator_excitement[0])
+    oscillator_excitement[0] = oscillator_excitement[0] + dt * (2*pumping - 1/excitement_decay - (1/excitement_decay + 100000*I)*oscillator_excitement[0])
 
-    print(oscillator_excitement[0])
+    print(oscillator_excitement[0], 100000*I)
 
 t = 0
 current_slice = 0

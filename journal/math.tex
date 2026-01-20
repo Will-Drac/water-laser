@@ -1,6 +1,7 @@
 \documentclass{article}
 \usepackage[margin=2cm]{geometry}
 \usepackage{graphicx}
+\usepackage{mathtools}
 
 \begin{document}
 
@@ -100,9 +101,9 @@ The simulation features reflective boundaries. To do this, the horizontal veloci
 
 \section{Electrons in the field}
 
-Since the water surface is mostly flat with vertical waves, in modeling the electric field we'll consider it as two-dimensional, and assume its vector at each point in space is pointing in the up-down direction.
+Since the water surface is mostly flat with vertical waves, in modeling the electric field we'll consider it as two-dimensional (in the $xy$ plane), and assume its vector at each point in space is pointing in the up-down direction.
 
-We imagine an electron as a particle around an atom. We imagine the attraction to the nucleus as a restoring force in the form $-kz$ (like a spring force). Being a charged particle with charge $-e$, it is affected by the electric field $\mathbf{E}(\mathbf{r}, t)$ at its position $\mathbf{r} = (x, y)$ and at time $t$.
+We imagine an electron as a particle around an atom. We imagine the attraction to the nucleus as a restoring force in the form $-kz$ (like a spring force). We also imagine that the atom is in the plane of the field ($z=0$). Being a charged particle with charge $-e$, it is affected by the electric field $\mathbf{E}(\mathbf{r}, t)$ at its position $\mathbf{r} = (x, y)$ and at time $t$.
 
 Since the electric field is modeled to always be in the up-down ($\hat{z}$) direction, the electron's oscillation will only happen in that direction.
 
@@ -226,23 +227,15 @@ We're using a simplifying approximation and thinking about each vertical column 
     I \approx \frac{1}{2}\,\rho\,\mathbf{u}^3 + \frac{1}{2}\rho\,(h+H)\,g\,||\mathbf{u}||
 \end{equation}
 
-\subsection{How the electrons use $n$}
+\subsection{An electron's force on the field}
 
-In the proper quantum mechanics way of describing atoms in a laser, when population inversion is attained $n > 0$, the atoms have a net constructive effect on the laser's light in a similar way to how we described emission. Then when $n < 0$, the atoms have a net destructive effect in the same way we described absorption.
+We would like to quantify how an electron pushes on the field.
 
-Without the effect of $n$, an electron at position $z$ above the field would apply a force to the field in the upward direction.
-
-\subsection{The choice of $k$ and its impact}
-
-\appendix
-
-\section{idk yet}
-
-When discussing an electric field and how it interacts with a particle like an electron, the electron's own contribution to the field is usually ignored. This is because the field only encodes the forces which would be applied if a particle was there. At the position of a point charge like an electron, there is a singularity, and that's a large problem conceptually. However, we can get around this by treating the electron as a ball with volume. Let's see how the field reacts at the point directly at the center of the electron, as the electron moves up and down around it. Let's do it in 2d for simplicity, with "the field" being a line at $h$ (height) $=0$, keeping with how we're treating the field as an object that the electron can go above and below.
+When discussing an electric field and how it interacts with a particle like an electron, the electron's own contribution to the field is usually ignored when analyzing that electron's motion. This is because the field only encodes the forces which would be applied if a particle was there. At the position of a point charge like an electron, there is a singularity, and that's a large problem conceptually. However, we can get around this by treating the electron as a ball with volume. Let's see how the field reacts at the point directly at the center of the electron, as the electron moves up and down around it. Let's do it in 2d for simplicity, with "the field" being a line at $h$ (height) $=0$, keeping with how we're treating the field as an object that the electron can go above and below.
 
 For each point inside the electron's volume, it produces a tiny force
 
-\begin{equation}
+\begin{equation}\label{eqn:coulomb}
     d\mathbf{F} = -\frac{k\,dq}{\mathbf{r^2}}\hat{\mathbf{r}}
 \end{equation}
 
@@ -266,17 +259,35 @@ Let's say that the electron has radius $R$ and charge $q$, then $\frac{q}{R} = \
 
 Written in terms of $r$ and $theta$, $x = r\cos\theta$ and $z = r\sin\theta + h$, where $h$ is the height of the center of the electron relative to the field.
 
-Integrating numerically and writing the force as a function of the height of the electron, we get the following graph
+Integrating numerically and writing the force as a function of the height of the electron, we get Figure \ref{fig:electron_force}. It can be seen that while the electron is still overlapping the origin ($h < R$), the force felt is linear.
+
 
 \begin{figure}
-    \includegraphics{Figure_1.png}
+    \centering
+    \includegraphics[width=4in,height=3in]{Figure_1.png}
     \caption{Graph}
-    \label{fig:test}
+    \label{fig:electron_force}
 \end{figure}
 
-\end{document}
+\subsection{How the electrons use $n$}
 
-It can be seen that while the electron is still overlapping the origin ($h < R$), the force felt is linear.
+In the proper quantum mechanics way of describing atoms in a laser, when population inversion is attained $n > 0$, the atoms have a net constructive effect on the laser's light in a similar way to how we described emission. Then when $n < 0$, the atoms have a net destructive effect in the same way we described absorption.
+
+As it was described in "Absorption" and "Emission", an absorbing "ground state" electron acts as one would expect from an electron in an electric field. An emitting "excited" electron has an effect on the field with a flipped sign, ie pushing the field away from the electron's position. Where is this sign exactly? It's in Equation \ref{eqn:coulomb}. An absorbing electron would have the negative sign, an emitting one wouldn't.
+
+So if all electrons were in ground state $(n = -1)$ the cluster of $N_T$ electrons would, as a whole follow Equation \ref{eqn:coulomb}. If they were all in the excited state $(n=1)$, the cluster would produce a force like Equation \ref{eqn:coulomb} but without the negative sign. Then if half were absorbing and half were emitting, their individual contributions would cancel out to produce the force $d\mathbf{F} = 0$. In general, we have the cluster producing a force:
+
+\begin{equation}
+    d\mathbf{F} = n\frac{k\,dq}{\mathbf{r^2}}\hat{\mathbf{r}}
+\end{equation}
+
+\subsection{The choice of $k$ and its impact}
+
+At the beginning of this section, we said that the electrons are attracted to the nucleus by a restoring force $F = -kx$. This value is important as it determines the colour of the laser.
+
+Lasers usually only emit a single wavelength of light. This is because the electrons in the lasing medium will only respond well to oscillations with a frequency near their natural frequency, $\omega_o \coloneq \sqrt{\frac{k}{m}}$.
+
+\end{document}
 
 /*
 
