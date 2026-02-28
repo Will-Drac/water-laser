@@ -15,8 +15,8 @@ pixels = ti.Vector.field(3, ti.f32, shape=(view_height, size))
 
 oscillator_pos = ti.field(dtype=ti.f32, shape=(3))
 oscillator_mass = 1
-oscillator_damping = 10
-natural_frequency = 32
+oscillator_damping = 20
+natural_frequency = 20
 k = natural_frequency**2
 oscillator_excitement = ti.field(dtype=ti.f32, shape=(1)) # initialized in setup()
 
@@ -43,7 +43,7 @@ ffmpeg = subprocess.Popen(
     stdin=subprocess.PIPE
 )
 
-simulation_time = 45  # in seconds
+simulation_time = 10  # in seconds
 
 dx = tank_size/size
 
@@ -86,7 +86,7 @@ def setup():
     for i in oscillator_pos:
         oscillator_pos[i] = 0.0
 
-    oscillator_excitement[0] = 0
+    oscillator_excitement[0] = 1
 
 @ti.func
 # applies a gaussian beam of pressure at position `center` (in tank space), with `spread` (sqrt(2) standard deviation in tank space), normalized with a multiple `strength`, then the gradient is calculated at point `sample`
@@ -126,12 +126,14 @@ def update(this_slice: ti.i32, time: ti.f32):
         s_f32 = ti.cast(size, ti.f32)
 
         tank_pos = ti.cast(i, ti.f32) * tank_size/s_f32
+
+        oscillator_force = -0.01*oscillator_excitement[0]*oscillator_pos[this_slice] / (oscillator_pos[this_slice]**2 + 0.01**2)
+
         oscillator_baseline_pressure_gradient = get_pressure_gradient(tank_pos, tank_size/2, 0.005, (150*starting)/1000)
         oscillator_baseline_pressure_gradient = 0
-        oscillator_force = 10*oscillator_excitement[0]
-        oscillator_pressure_gradient = get_pressure_gradient(tank_pos, tank_size/2, 0.02, oscillator_force*oscillator_pos[this_slice])
+        oscillator_pressure_gradient = get_pressure_gradient(tank_pos, tank_size/2, 0.02, oscillator_force)
 
-        external_pressure_strength = 200.0 * ti.max(-10.0*ti.abs(time-0.5)+1.0, 0)
+        external_pressure_strength = 400.0 * ti.max(-10.0*ti.abs(time-0.5)+1.0, 0)
         external_pressure_gradient = get_pressure_gradient(tank_pos, 0.1, 0.02, external_pressure_strength/1000)
 
         del_pressure_del_x = oscillator_baseline_pressure_gradient + oscillator_pressure_gradient + external_pressure_gradient
@@ -213,7 +215,7 @@ def update_oscillator(current_slice: ti.i32):
 
     oscillator_pos[next_slice] = (
         -k*dt**2/oscillator_mass*oscillator_pos[current_slice]
-        +dt**2*local_F/oscillator_mass
+        -dt**2*local_F/oscillator_mass
         -oscillator_damping*dt/oscillator_mass*(oscillator_pos[current_slice] - oscillator_pos[last_slice])
         +2*oscillator_pos[current_slice]
         -oscillator_pos[last_slice]
@@ -224,8 +226,11 @@ def update_oscillator(current_slice: ti.i32):
     I = 0.5*density*ti.pow(horizontal_speed, 3) + 0.5*density*(water_height + H)*g*horizontal_speed
 
     oscillator_excitement[0] = oscillator_excitement[0] + dt * (2*pumping - 1/excitement_decay - (1/excitement_decay + 100000*I)*oscillator_excitement[0])
+    # oscillator_excitement[0] = -1
 
-    print(oscillator_excitement[0], 100000*I)
+    # print(oscillator_excitement[0], 10000*I)
+    # print(oscillator_pos[current_slice])
+    # print(oscillator_pos[current_slice], 0.01*oscillator_excitement[0]*oscillator_pos[current_slice] / (oscillator_pos[current_slice]**2 + 0.01**2))
 
 t = 0
 current_slice = 0

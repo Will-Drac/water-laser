@@ -103,7 +103,7 @@ The simulation features reflective boundaries. To do this, the horizontal veloci
 
 Since the water surface is mostly flat with vertical waves, in modeling the electric field we'll consider it as two-dimensional (in the $xy$ plane), and assume its vector at each point in space is pointing in the up-down direction.
 
-We imagine an electron as a particle around an atom. We imagine the attraction to the nucleus as a restoring force in the form $-kz$ (like a spring force). We also imagine that the atom is in the plane of the field ($z=0$). Being a charged particle with charge $-e$, it is affected by the electric field $\mathbf{E}(\mathbf{r}, t)$ at its position $\mathbf{r} = (x, y)$ and at time $t$.
+We imagine an electron as a particle around an atom. We imagine the attraction to the nucleus as a restoring force in the form $-kz$ (like a spring force). We also imagine that the atom is in the plane of the field ($z=0$). Being a charged particle with charge $-e$, it is affected by the electric field $\mathbf{E}(\mathbf{r}, t)$ at its position $\mathbf{r} = (x, y)$ and at time $t$. Finally, we add a small damping force $F_D = -\beta \mathbf{\dot{r}}$, accounting for energy lost anywhere other than light emission.
 
 Since the electric field is modeled to always be in the up-down ($\hat{z}$) direction, the electron's oscillation will only happen in that direction.
 
@@ -112,12 +112,12 @@ Writing Newton's second law for the electron:
 \begin{eqnarray}
     F_{net}= m \ddot{z}
     \\
-    -k z + q E(\mathbf{r}, t) = m \ddot{z}
+    -kz -\beta\dot{z} + q E(\mathbf{r}, t) = m \ddot{z}
     \\
-    \frac{q}{m} E = \ddot{z} + \frac{k}{m}z
+    \frac{q}{m} E = \ddot{z} +\frac{\beta}{m} \dot{z} + \frac{k}{m}z
 \end{eqnarray}
 
-This is the form of a driven harmonic oscillator. It is not so simple, though, because the electron, being a charged particle, affects the electric field as it is moved. For example, a wave pulse comes by in the up ($+z$) direction. This leads the electron to get pushed down (since its charge is negative). The electron is now below the 2d plane of the electric field \footnote{but we still imagine that the electron is affected by the nearest point on the field, even if it is technically not inside the field anymore}. Then, since it's a negatively charged particle, it pulls the field toward it, downward.
+This is the form of a driven and damped harmonic oscillator. It is not so simple, though, because the electron, being a charged particle, affects the electric field as it is moved. For example, a wave pulse comes by in the up ($+z$) direction. This leads the electron to get pushed down (since its charge is negative). The electron is now below the 2d plane of the electric field \footnote{but we still imagine that the electron is affected by the nearest point on the field, even if it is technically not inside the field anymore}. Then, since it's a negatively charged particle, it pulls the field toward it, downward.
 
 \subsection{Absorption}
 
@@ -254,7 +254,7 @@ Where $x$ and $z$ are the horizontal and vertical distances to this point within
 Let's say that the electron has radius $R$ and charge $q$, then $\frac{q}{R} = \frac{dq}{dA}$, so in polar coordinates, $dq = \frac{q}{R}\,r\,dr\,d\theta$.
 
 \begin{equation}
-    F = \int_{0}^{2\pi}\int_{0}^{R} \frac{q}{R}\,\frac{k\,r}{x^2 + z^2}z\,dr\,d\theta
+    F(h) = \int_{0}^{2\pi}\int_{0}^{R} \frac{q}{R}\,\frac{k\,r}{x^2 + z^2}z\,dr\,d\theta
 \end{equation}
 
 Written in terms of $r$ and $theta$, $x = r\cos\theta$ and $z = r\sin\theta + h$, where $h$ is the height of the center of the electron relative to the field.
@@ -268,6 +268,14 @@ Integrating numerically and writing the force as a function of the height of the
     \caption{Graph}
     \label{fig:electron_force}
 \end{figure}
+
+This function looks similar to a function of the form
+
+\begin{equation}
+    F(h) = \frac{A}{h^2 + R^2}h
+\end{equation}
+
+Where $R$ is the radius of the electron 
 
 \subsection{How the electrons use $n$}
 
@@ -286,6 +294,8 @@ So if all electrons were in ground state $(n = -1)$ the cluster of $N_T$ electro
 At the beginning of this section, we said that the electrons are attracted to the nucleus by a restoring force $F = -kx$. This value is important as it determines the colour of the laser.
 
 Lasers usually only emit a single wavelength of light. This is because the electrons in the lasing medium will only respond well to oscillations with a frequency near their natural frequency, $\omega_o \coloneq \sqrt{\frac{k}{m}}$.
+
+More precisely, 
 
 \end{document}
 
